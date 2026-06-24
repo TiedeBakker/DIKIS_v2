@@ -6,6 +6,8 @@ import GenericForm, { MetadataField } from '@/components/GenericForm';
 import { sql } from 'drizzle-orm';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 interface Props {
   searchParams: Promise<{ tabel?: string }>;
 }
