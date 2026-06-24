@@ -137,13 +137,14 @@ export const beheerMetadata = sqliteTable("beheer_metadata", {
   tabelLabel: text("tabel_label").notNull(),
   veldId: text("veld_id").notNull(),
   veldLabel: text("veld_label").notNull(),
-  veldType: text("veld_type").notNull(), // Rendert als input, select, textarea, etc.
+  veldType: text("veld_type").notNull(),
   volgnummer: integer("volgnummer").notNull(),
   verplicht: integer('verplicht', { mode: 'boolean' }).default(false),
   toelichting: text("toelichting"),
   lookupTabel: text("lookup_tabel"), 
+  // NIEUW: Geeft aan of dit veld een kolom moet worden in het overzicht
+  toonInLijst: integer('toon_in_lijst', { mode: 'boolean' }).default(false), 
 });
-
 // ==========================================
 // 7. SQL VIEWS
 // ==========================================
