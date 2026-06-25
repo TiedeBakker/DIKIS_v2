@@ -18,13 +18,13 @@ export default async function BasistabellenPage({ searchParams }: Props) {
   const { tabel, editId } = await searchParams;
   const doelTabel = tabel || 'gebouwen';
 
-  // 1. Haal alle unieke tabellen op
+  // 1. Haal alle unieke basistabellen op voor de tab-navigatie
   const uniekeTabellenResult = await db
     .select({ tabelNaam: beheerMetadata.tabelNaam, tabelLabel: beheerMetadata.tabelLabel })
     .from(beheerMetadata)
     .groupBy(beheerMetadata.tabelNaam);
 
-  // 2. Haal de formulier-velden op
+  // 2. Haal de velddefinities op voor de huidige actieve tabel
   const formDefinition = await db
     .select()
     .from(beheerMetadata)
@@ -35,16 +35,14 @@ export default async function BasistabellenPage({ searchParams }: Props) {
     .filter(f => f.toonInLijst)
     .map(f => ({ veldId: f.veldId, veldLabel: f.veldLabel }));
 
-  // 3. Dynamisch alle bestaande records ophalen uit de doeltabel via db.run()
+  // 3. Dynamisch alle bestaande records van de doeltabel ophalen
   let bestaandeRecords: Record<string, any>[] = [];
   let actueelEditRecord: Record<string, any> | null = null;
 
   try {
-    // We selecteren ALLE kolommen van de tabel voor het geval we er een moeten editen
     const queryResult = await db.run(sql.raw(`SELECT * FROM "${doelTabel}"`));
     bestaandeRecords = JSON.parse(JSON.stringify(queryResult.rows));
 
-    // Als we aan het editen zijn, zoek het specifieke record uit de array
     if (editId) {
       actueelEditRecord = bestaandeRecords.find(r => r.id === editId) || null;
     }
@@ -52,44 +50,59 @@ export default async function BasistabellenPage({ searchParams }: Props) {
     console.error("Kon records niet ophalen:", e);
   }
 
-  // 4. Server Action om data op te slaan (werkt nu voor INSERT én UPDATE)
+  // =========================================================================
+  // UNIFORME EENLIJNS-LOOKUPS (Alles via keuzelijst_opties)
+  // =========================================================================
+  const dynamischeLookups: Record<string, string[]> = {};
+  const selectVelden = formDefinition.filter(f => f.veldType?.toLowerCase() === 'select');
+
+  for (const veld of selectVelden) {
+    // We gebruiken 'lookupTabel' uit je schema nu als de 'keuzelijst_id' (bijv. 'eenheden')
+    const keuzelijstId = veld.lookupTabel;
+
+    if (keuzelijstId) {
+      try {
+        // Omdat de ID's herkenbare tekst zijn ('eenheden'), kunnen we direct filteren op keuzelijst_id!
+        const optiesResult = await db.$client.execute({
+          sql: `
+          SELECT waarde 
+          FROM "keuzelijst_opties" 
+          WHERE "keuzelijst_id" = ? 
+          ORDER BY "volgnr" ASC
+        `,
+          args: [keuzelijstId]
+        });
+
+        dynamischeLookups[veld.veldId] = optiesResult.rows.map(row => String(row.waarde));
+      } catch (err) {
+        console.error(`Fout bij het laden van keuzelijst: ${keuzelijstId}`, err);
+      }
+    }
+  }
+  // =========================================================================
+
+  // 4. Server Action om data op te slaan (INSERT óf UPDATE via de rauwe client)
   async function handleInsertOrUpdateRecord(formData: Record<string, any>, activeEditId?: string | null) {
     'use server';
 
-    // Zoek dit gedeelte op in src/app/modules/basistabellen/page.tsx
-
     if (activeEditId) {
-      // UPDATE MECHANISME
-
-      // 1. Zorg dat we 'id' NIET proberen te updaten in de SET clause
       const updateData = { ...formData };
       delete updateData.id;
 
-      // 2. Bouw de SET string: "straat" = ?, "nummer" = ?
       const setStatements = Object.keys(updateData).map(key => `"${key}" = ?`).join(', ');
-
-      // 3. Voeg de parameters samen: EERST de formulierwaarden, ALS LAATSTE het id voor de WHERE clause
       const values = [...Object.values(updateData), activeEditId];
 
       try {
-        // We praten hier rechtstreeks tegen de onderliggende Turso/SQLite-driver via db.$client.execute.
-        // Dit accepteert exact 1 object-argument, waardoor TypeScript 100% tevreden is.
         await db.$client.execute({
-          sql: `
-      UPDATE "${doelTabel}" 
-      SET ${setStatements}
-      WHERE "id" = ?
-    `,
+          sql: `UPDATE "${doelTabel}" SET ${setStatements} WHERE "id" = ?`,
           args: values
         });
-
         revalidatePath('/modules/basistabellen');
       } catch (error) {
         console.error('Fout bij updaten:', error);
         throw new Error('Kon het record niet updaten.');
       }
     } else {
-      // INSERT MECHANISME (Oude vertrouwde code)
       const newId = crypto.randomUUID();
       const columns = ['id', ...Object.keys(formData)];
       const values = [newId, ...Object.values(formData)];
@@ -134,14 +147,15 @@ export default async function BasistabellenPage({ searchParams }: Props) {
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 
-          {/* Kolom 1: Het Formulier (luistert nu naar editId via key en initialData) */}
+          {/* Kolom 1: Het Formulier */}
           <div>
             <GenericForm
-              key={`${doelTabel}-${editId || 'new'}`} // Forceert her-render bij switch tussen nieuw/edit
+              key={`${doelTabel}-${editId || 'new'}`}
               tabelNaam={doelTabel}
               fields={formDefinition as MetadataField[]}
               onSubmit={handleInsertOrUpdateRecord}
               initialData={actueelEditRecord}
+              lookups={dynamischeLookups} // <-- Geef de vers geladen lookups mee!
             />
           </div>
 

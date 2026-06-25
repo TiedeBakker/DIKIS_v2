@@ -136,7 +136,7 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
                 </select>
               ) : 
               
-              /* TYPE 2: SELECT (DYNAMIC LOOKUP DROPDOWN) */
+  /* TYPE 2: SELECT (DYNAMIC LOOKUP DROPDOWN) */
               type === 'select' ? (
                 <select
                   id={field.veldId}
@@ -155,11 +155,47 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
                   ))}
                 </select>
               ) : 
-              
-              /* TYPE 3: TEXT / NUMBER / ETC. */
+
+              /* TYPE 3: NUMERIEK (BLOKKEERT FOUTE KARAKTERS) */
+              type === 'number' ? (
+                <input
+                  type="number"
+                  id={field.veldId}
+                  name={field.veldId}
+                  value={huidigeWaarde}
+                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                  // Voorkom dat 'e', 'E', '+', '-' getypt kunnen worden (als het puur positieve getallen betreft)
+                  onKeyDown={(e) => {
+                    if (['e', 'E', '+', '-'].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  required={Boolean(field.verplicht)}
+                  disabled={isPending}
+                  placeholder={field.toelichting || ''}
+                  className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                />
+              ) :
+
+              /* TYPE 4: LANGE TEKST (DUBBELE HOOGTE TEXTAREA) */
+              type === 'tekstveld' ? (
+                <textarea
+                  id={field.veldId}
+                  name={field.veldId}
+                  value={huidigeWaarde}
+                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                  required={Boolean(field.verplicht)}
+                  disabled={isPending}
+                  placeholder={field.toelichting || ''}
+                  rows={3} // Dit geeft visueel direct de dubbele/driedubbele hoogte
+                  className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full resize-y"
+                />
+              ) :
+
+              /* DEFAULT: STANDAARD KORTE INVOER (Voor 'string', 'email', 'postcode' etc.) */
               (
                 <input
-                  type={type === 'number' ? 'number' : 'text'}
+                  type="text"
                   id={field.veldId}
                   name={field.veldId}
                   value={huidigeWaarde}
