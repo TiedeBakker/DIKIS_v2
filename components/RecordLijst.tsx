@@ -41,7 +41,7 @@ export default function RecordLijst({ tabelNaam, kolommen, records }: RecordLijs
           <h3 className="text-lg font-semibold text-slate-800">Aanwezige gegevens</h3>
           <p className="text-xs text-slate-400 italic">Dubbelklik op een rij om deze te bewerken</p>
         </div>
-        
+
         <input
           type="text"
           placeholder={`Filter ${tabelNaam}...`}
@@ -52,16 +52,16 @@ export default function RecordLijst({ tabelNaam, kolommen, records }: RecordLijs
       </div>
 
       {/* PUNT 1: Vaste maximale hoogte met verticale scroll */}
-      <div className="overflow-x-auto border rounded-md max-h-[520px] overflow-y-auto">
+      <div className="overflow-x-auto border rounded-md max-h-130 overflow-y-auto">
         <table className="min-w-full divide-y divide-slate-200 text-sm table-fixed">
-          <thead className="bg-slate-50 text-slate-700 font-medium sticky top-0 bg-white z-10 shadow-sm">
+          <thead className=" text-slate-700 font-medium sticky top-0 bg-white z-10 shadow-sm">
             <tr>
               {kolommen.map((k) => (
                 <th key={k.veldId} className="px-4 py-2 text-left bg-slate-50">{k.veldLabel}</th>
               ))}
             </tr>
           </thead>
-          
+
           <tbody className="divide-y divide-slate-200 text-slate-600">
             {gefilterdeRecords.length === 0 ? (
               <tr>
@@ -71,8 +71,8 @@ export default function RecordLijst({ tabelNaam, kolommen, records }: RecordLijs
               </tr>
             ) : (
               gefilterdeRecords.map((record) => (
-                <tr 
-                  key={record.id} 
+                <tr
+                  key={record.id}
                   onDoubleClick={() => handleRowDoubleClick(record.id)} // PUNT 2: Dubbelklik trigger
                   className="hover:bg-blue-50 cursor-pointer transition-colors select-none"
                   title="Dubbelklik om te bewerken"

@@ -8,7 +8,7 @@ export interface MetadataField {
   id: string;
   veldId: string;
   veldLabel: string;
-  veldType: string;
+  veldType: string;       // 'text' | 'number' | 'boolean' | 'select' etc.
   verplicht: boolean | number;
   toelichting?: string | null;
 }
@@ -18,9 +18,10 @@ interface GenericFormProps {
   fields: MetadataField[];
   onSubmit: (formData: Record<string, any>, editId?: string | null) => Promise<void>;
   initialData?: Record<string, any> | null;
+  lookups?: Record<string, string[]>; 
 }
 
-export default function GenericForm({ tabelNaam, fields, onSubmit, initialData }: GenericFormProps) {
+export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, lookups = {} }: GenericFormProps) {
   const [isPending, startTransition] = useTransition();
   const [succes, setSucces] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -29,16 +30,14 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData }
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isEditing = !!initialData; // Zijn we aan het editen?
+  const isEditing = !!initialData;
 
-  // Local state voor de input-waarden zodat we ze kunnen vullen bij bewerken
   const [formValues, setFormValues] = useState<Record<string, any>>({});
 
-  // Zodra initialData verandert (door dubbelklik), vul de velden
   useEffect(() => {
     if (initialData) {
       setFormValues(initialData);
-      setIsGewijzigdNaOpslaan(false); // Blokkeer tot er écht iets aan gepast is
+      setIsGewijzigdNaOpslaan(false);
     } else {
       setFormValues({});
       setIsGewijzigdNaOpslaan(true);
@@ -73,7 +72,6 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData }
           setFormValues({});
           setIsGewijzigdNaOpslaan(true);
         } else if (isEditing) {
-          // Na succesvol editen, sluit de edit-modus en ververs
           handleCancelEdit();
         } else {
           setIsGewijzigdNaOpslaan(false);
@@ -111,23 +109,70 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData }
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {fields.map((field) => (
-          <div key={field.id} className="flex flex-col space-y-1">
-            <label htmlFor={field.veldId} className="text-sm font-medium text-slate-700">
-              {field.veldLabel} {Boolean(field.verplicht) && <span className="text-red-500">*</span>}
-            </label>
-            <input
-              type={field.veldType === 'number' ? 'number' : 'text'}
-              id={field.veldId}
-              name={field.veldId}
-              value={formValues[field.veldId] ?? ''}
-              onChange={(e) => handleInputChange(field.veldId, e.target.value)}
-              required={Boolean(field.verplicht)}
-              disabled={isPending}
-              className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm"
-            />
-          </div>
-        ))}
+        {fields.map((field) => {
+          const type = field.veldType?.toLowerCase() || 'text';
+          const huidigeWaarde = formValues[field.veldId] ?? '';
+
+          return (
+            <div key={field.id} className="flex flex-col space-y-1">
+              <label htmlFor={field.veldId} className="text-sm font-medium text-slate-700">
+                {field.veldLabel} {Boolean(field.verplicht) && <span className="text-red-500">*</span>}
+              </label>
+
+              {/* TYPE 1: BOOLEAN (JA/NEE DROPDOWN) */}
+              {type === 'boolean' ? (
+                <select
+                  id={field.veldId}
+                  name={field.veldId}
+                  value={huidigeWaarde === true || huidigeWaarde === 1 || huidigeWaarde === '1' ? '1' : huidigeWaarde === false || huidigeWaarde === 0 || huidigeWaarde === '0' ? '0' : ''}
+                  onChange={(e) => handleInputChange(field.veldId, e.target.value === '' ? null : Number(e.target.value))}
+                  required={Boolean(field.verplicht)}
+                  disabled={isPending}
+                  className="px-3 py-2 border border-slate-300 bg-white rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                >
+                  <option value="">-- Maak een keuze --</option>
+                  <option value="1">Ja</option>
+                  <option value="0">Nee</option>
+                </select>
+              ) : 
+              
+              /* TYPE 2: SELECT (DYNAMIC LOOKUP DROPDOWN) */
+              type === 'select' ? (
+                <select
+                  id={field.veldId}
+                  name={field.veldId}
+                  value={huidigeWaarde}
+                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                  required={Boolean(field.verplicht)}
+                  disabled={isPending}
+                  className="px-3 py-2 border border-slate-300 bg-white rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                >
+                  <option value="">-- Selecteer {field.veldLabel.toLowerCase()} --</option>
+                  {(lookups[field.veldId] || []).map((optie) => (
+                    <option key={optie} value={optie}>
+                      {optie}
+                    </option>
+                  ))}
+                </select>
+              ) : 
+              
+              /* TYPE 3: TEXT / NUMBER / ETC. */
+              (
+                <input
+                  type={type === 'number' ? 'number' : 'text'}
+                  id={field.veldId}
+                  name={field.veldId}
+                  value={huidigeWaarde}
+                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                  required={Boolean(field.verplicht)}
+                  disabled={isPending}
+                  placeholder={field.toelichting || ''}
+                  className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-4 border-t gap-4">
