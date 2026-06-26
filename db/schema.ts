@@ -65,10 +65,21 @@ export const parameters = sqliteTable("parameters", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   naam: text("naam").notNull(),
   toelichting: text("toelichting"),
-  parametertypeId: text("parametertype_id").notNull().references(() => parametertypen.id),
-  eenheidId: text("eenheid_id").references(() => eenheden.id),
-  keuzelijstId: text("keuzelijst_id").references(() => keuzelijsten.id),
+  
+  // Verwijst nu verplicht naar de UUID van de specifieke optie in de centrale tabel
+  parametertypeId: text("parametertype_id")
+    .notNull()
+    .references(() => keuzelijstOpties.id, { onDelete: "restrict" }),
+    
+  // Verwijst naar de UUID van de specifieke eenheid-optie
+  eenheidId: text("eenheid_id")
+    .references(() => keuzelijstOpties.id, { onDelete: "restrict" }),
+    
+  // Verwijst naar de keuzelijst-hoofdtabel (alleen nodig als parametertypeId 'keuzelijst' is)
+  keuzelijstId: text("keuzelijst_id")
+    .references(() => keuzelijsten.id, { onDelete: "restrict" }),
 });
+
 
 // ==========================================
 // 4. FORMULIER ENGINE & GROEPEN

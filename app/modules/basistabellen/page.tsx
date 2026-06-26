@@ -51,21 +51,21 @@ export default async function BasistabellenPage({ searchParams }: Props) {
   }
 
   // =========================================================================
-  // UNIFORME EENLIJNS-LOOKUPS (Alles via keuzelijst_opties)
+  // UNIFORME LOOKUPS (Haalt nu zowel ID als Waarde op!)
   // =========================================================================
-  const dynamischeLookups: Record<string, string[]> = {};
+  // We veranderen het type tijdelijk naar any of breiden GenericForm zo meteen uit
+  const dynamischeLookups: Record<string, { id: string; label: string }[]> = {};
   const selectVelden = formDefinition.filter(f => f.veldType?.toLowerCase() === 'select');
 
   for (const veld of selectVelden) {
-    // We gebruiken 'lookupTabel' uit je schema nu als de 'keuzelijst_id' (bijv. 'eenheden')
-    const keuzelijstId = veld.lookupTabel;
+    const keuzelijstId = veld.lookupTabel; // Bijv. 'eenheden' of 'parametertypen'
 
     if (keuzelijstId) {
       try {
-        // Omdat de ID's herkenbare tekst zijn ('eenheden'), kunnen we direct filteren op keuzelijst_id!
+        // We halen nu bewust de 'id' ÉN de 'waarde' op uit keuzelijst_opties
         const optiesResult = await db.$client.execute({
           sql: `
-          SELECT waarde 
+          SELECT id, waarde 
           FROM "keuzelijst_opties" 
           WHERE "keuzelijst_id" = ? 
           ORDER BY "volgnr" ASC
@@ -73,14 +73,16 @@ export default async function BasistabellenPage({ searchParams }: Props) {
           args: [keuzelijstId]
         });
 
-        dynamischeLookups[veld.veldId] = optiesResult.rows.map(row => String(row.waarde));
+        dynamischeLookups[veld.veldId] = optiesResult.rows.map(row => ({
+          id: String(row.id),
+          label: String(row.waarde)
+        }));
       } catch (err) {
         console.error(`Fout bij het laden van keuzelijst: ${keuzelijstId}`, err);
       }
     }
   }
   // =========================================================================
-
   // 4. Server Action om data op te slaan (INSERT óf UPDATE via de rauwe client)
   async function handleInsertOrUpdateRecord(formData: Record<string, any>, activeEditId?: string | null) {
     'use server';
@@ -103,9 +105,18 @@ export default async function BasistabellenPage({ searchParams }: Props) {
         throw new Error('Kon het record niet updaten.');
       }
     } else {
-      const newId = crypto.randomUUID();
-      const columns = ['id', ...Object.keys(formData)];
-      const values = [newId, ...Object.values(formData)];
+      // GENERIEKE ID-BEHANDELING:
+      // Als de gebruiker zelf een ID heeft ingevuld (bijv. bij keuzelijsten), 
+      // gebruiken we die. Anders genereren we een UUID.
+      const heeftEigenId = 'id' in formData && formData.id && String(formData.id).trim() !== '';
+      const finalId = heeftEigenId ? String(formData.id).trim() : crypto.randomUUID();
+
+      // Filter de eventuele id uit formData om dubbelingen te voorkomen
+      const geschoondeData = { ...formData };
+      delete geschoondeData.id;
+
+      const columns = ['id', ...Object.keys(geschoondeData)];
+      const values = [finalId, ...Object.values(geschoondeData)];
       const columnNamesStr = columns.map(c => `"${c}"`).join(', ');
 
       try {
@@ -120,6 +131,30 @@ export default async function BasistabellenPage({ searchParams }: Props) {
       }
     }
   }
+
+// =========================================================================
+  // VERRIJK RECORDS VOOR DE RECORDLIJST (Gecorrigeerd!)
+  // =========================================================================
+  const verrijkteRecords = bestaandeRecords.map(record => {
+    const nieuwRecord = { ...record };
+    
+    selectVelden.forEach(veld => {
+      const huidigeIdInRecord = record[veld.veldId];
+      
+      if (huidigeIdInRecord) {
+        // Nu netjes aan elkaar geschreven en type-safe gecast
+        const optiesVoorVeld = (dynamischeLookups[veld.veldId] || []) as { id: string; label: string }[];
+        const gevondenOptie = optiesVoorVeld.find(o => o.id === String(huidigeIdInRecord));
+        
+        if (gevondenOptie) {
+          nieuwRecord[veld.veldId] = gevondenOptie.label;
+        }
+      }
+    });
+    
+    return nieuwRecord;
+  });
+  // =========================================================================
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 px-4">
@@ -166,7 +201,7 @@ export default async function BasistabellenPage({ searchParams }: Props) {
                 key={`${doelTabel}-lijst`}
                 tabelNaam={doelTabel}
                 kolommen={lijstKolommen}
-                records={bestaandeRecords}
+                records={verrijkteRecords} // <-- Verander 'bestaandeRecords' naar 'verrijkteRecords'
               />
             ) : (
               <div className="p-6 bg-slate-50 text-slate-500 border rounded-lg text-sm italic">

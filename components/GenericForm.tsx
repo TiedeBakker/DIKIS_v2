@@ -18,7 +18,7 @@ interface GenericFormProps {
   fields: MetadataField[];
   onSubmit: (formData: Record<string, any>, editId?: string | null) => Promise<void>;
   initialData?: Record<string, any> | null;
-  lookups?: Record<string, string[]>; 
+  lookups?: Record<string, { id: string; label: string }[]>; // <-- Aangepast!
 }
 
 export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, lookups = {} }: GenericFormProps) {
@@ -27,7 +27,7 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
   const [fout, setFout] = useState<string | null>(null);
   const [onthoudGegevens, setOnthoudGegevens] = useState(false);
   const [isGewijzigdNaOpslaan, setIsGewijzigdNaOpslaan] = useState(true);
-  
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditing = !!initialData;
@@ -67,7 +67,7 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
         const editId = searchParams.get('editId');
         await onSubmit(formValues, editId);
         setSucces(true);
-        
+
         if (!onthoudGegevens && !isEditing) {
           setFormValues({});
           setIsGewijzigdNaOpslaan(true);
@@ -76,7 +76,7 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
         } else {
           setIsGewijzigdNaOpslaan(false);
         }
-        
+
         setTimeout(() => setSucces(false), 4000);
       } catch (err) {
         setFout('Er is iets misgegaan bij het opslaan.');
@@ -119,93 +119,104 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
                 {field.veldLabel} {Boolean(field.verplicht) && <span className="text-red-500">*</span>}
               </label>
 
-              {/* TYPE 1: BOOLEAN (JA/NEE DROPDOWN) */}
+              {/* TYPE 1: BOOLEAN (MODERN SCHUIFJE / TOGGLE SWITCH) */}
               {type === 'boolean' ? (
-                <select
-                  id={field.veldId}
-                  name={field.veldId}
-                  value={huidigeWaarde === true || huidigeWaarde === 1 || huidigeWaarde === '1' ? '1' : huidigeWaarde === false || huidigeWaarde === 0 || huidigeWaarde === '0' ? '0' : ''}
-                  onChange={(e) => handleInputChange(field.veldId, e.target.value === '' ? null : Number(e.target.value))}
-                  required={Boolean(field.verplicht)}
-                  disabled={isPending}
-                  className="px-3 py-2 border border-slate-300 bg-white rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                >
-                  <option value="">-- Maak een keuze --</option>
-                  <option value="1">Ja</option>
-                  <option value="0">Nee</option>
-                </select>
-              ) : 
-              
-  /* TYPE 2: SELECT (DYNAMIC LOOKUP DROPDOWN) */
-              type === 'select' ? (
-                <select
-                  id={field.veldId}
-                  name={field.veldId}
-                  value={huidigeWaarde}
-                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
-                  required={Boolean(field.verplicht)}
-                  disabled={isPending}
-                  className="px-3 py-2 border border-slate-300 bg-white rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                >
-                  <option value="">-- Selecteer {field.veldLabel.toLowerCase()} --</option>
-                  {(lookups[field.veldId] || []).map((optie) => (
-                    <option key={optie} value={optie}>
-                      {optie}
-                    </option>
-                  ))}
-                </select>
-              ) : 
+                <div className="flex items-center h-[38px]"> {/* Hoogte uitgelijnd met andere inputs */}
+                  <label
+                    htmlFor={field.veldId}
+                    className="relative inline-flex items-center cursor-pointer select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      id={field.veldId}
+                      name={field.veldId}
+                      // Een boolean in SQLite is vaak 1 of 0, of een echte boolean
+                      checked={huidigeWaarde === true || huidigeWaarde === 1 || huidigeWaarde === '1'}
+                      onChange={(e) => handleInputChange(field.veldId, e.target.checked ? 1 : 0)}
+                      disabled={isPending}
+                      className="sr-only peer" // Verbergt de standaard lelijke HTML-checkbox
+                    />
+                    {/* De achtergrond van het schuifje */}
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
 
-              /* TYPE 3: NUMERIEK (BLOKKEERT FOUTE KARAKTERS) */
-              type === 'number' ? (
-                <input
-                  type="number"
-                  id={field.veldId}
-                  name={field.veldId}
-                  value={huidigeWaarde}
-                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
-                  // Voorkom dat 'e', 'E', '+', '-' getypt kunnen worden (als het puur positieve getallen betreft)
-                  onKeyDown={(e) => {
-                    if (['e', 'E', '+', '-'].includes(e.key)) {
-                      e.preventDefault();
-                    }
-                  }}
-                  required={Boolean(field.verplicht)}
-                  disabled={isPending}
-                  placeholder={field.toelichting || ''}
-                  className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                />
+                    {/* Dynamisch tekst-labeltje naast het schuifje voor extra duidelijkheid */}
+                    <span className="ms-3 text-sm font-medium text-slate-600 min-w-[24px]">
+                      {huidigeWaarde === true || huidigeWaarde === 1 || huidigeWaarde === '1' ? 'Ja' : 'Nee'}
+                    </span>
+                  </label>
+                </div>
               ) :
 
-              /* TYPE 4: LANGE TEKST (DUBBELE HOOGTE TEXTAREA) */
-              type === 'tekstveld' ? (
-                <textarea
-                  id={field.veldId}
-                  name={field.veldId}
-                  value={huidigeWaarde}
-                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
-                  required={Boolean(field.verplicht)}
-                  disabled={isPending}
-                  placeholder={field.toelichting || ''}
-                  rows={3} // Dit geeft visueel direct de dubbele/driedubbele hoogte
-                  className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full resize-y"
-                />
-              ) :
+                /* TYPE 2: SELECT (DYNAMIC LOOKUP DROPDOWN MET ID-RETENTION) */
+                type === 'select' ? (
+                  <select
+                    id={field.veldId}
+                    name={field.veldId}
+                    value={huidigeWaarde}
+                    onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                    required={Boolean(field.verplicht)}
+                    disabled={isPending}
+                    className="px-3 py-2 border border-slate-300 bg-white rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                  >
+                    <option value="">-- Selecteer {field.veldLabel.toLowerCase()} --</option>
+                    {(lookups[field.veldId] || []).map((optie) => (
+                      <option key={optie.id} value={optie.id}>
+                        {optie.label}
+                      </option>
+                    ))}
+                  </select>
+                ) :
 
-              /* DEFAULT: STANDAARD KORTE INVOER (Voor 'string', 'email', 'postcode' etc.) */
-              (
-                <input
-                  type="text"
-                  id={field.veldId}
-                  name={field.veldId}
-                  value={huidigeWaarde}
-                  onChange={(e) => handleInputChange(field.veldId, e.target.value)}
-                  required={Boolean(field.verplicht)}
-                  disabled={isPending}
-                  placeholder={field.toelichting || ''}
-                  className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
-                />
-              )}
+                  /* TYPE 3: NUMERIEK (BLOKKEERT FOUTE KARAKTERS) */
+                  type === 'number' ? (
+                    <input
+                      type="number"
+                      id={field.veldId}
+                      name={field.veldId}
+                      value={huidigeWaarde}
+                      onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                      // Voorkom dat 'e', 'E', '+', '-' getypt kunnen worden (als het puur positieve getallen betreft)
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-'].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
+                      required={Boolean(field.verplicht)}
+                      disabled={isPending}
+                      placeholder={field.toelichting || ''}
+                      className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                    />
+                  ) :
+
+                    /* TYPE 4: LANGE TEKST (DUBBELE HOOGTE TEXTAREA) */
+                    type === 'tekstveld' ? (
+                      <textarea
+                        id={field.veldId}
+                        name={field.veldId}
+                        value={huidigeWaarde}
+                        onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                        required={Boolean(field.verplicht)}
+                        disabled={isPending}
+                        placeholder={field.toelichting || ''}
+                        rows={3} // Dit geeft visueel direct de dubbele/driedubbele hoogte
+                        className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full resize-y"
+                      />
+                    ) :
+
+                      /* DEFAULT: STANDAARD KORTE INVOER (Voor 'string', 'email', 'postcode' etc.) */
+                      (
+                        <input
+                          type="text"
+                          id={field.veldId}
+                          name={field.veldId}
+                          value={huidigeWaarde}
+                          onChange={(e) => handleInputChange(field.veldId, e.target.value)}
+                          required={Boolean(field.verplicht)}
+                          disabled={isPending}
+                          placeholder={field.toelichting || ''}
+                          className="px-3 py-2 border border-slate-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                        />
+                      )}
             </div>
           );
         })}
@@ -235,9 +246,8 @@ export default function GenericForm({ tabelNaam, fields, onSubmit, initialData, 
         <button
           type="submit"
           disabled={isKnopGeblokkeerd}
-          className={`px-5 py-2 text-white text-sm font-medium rounded-md shadow-sm disabled:bg-slate-200 disabled:text-slate-400 ${
-            isEditing ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
-          }`}
+          className={`px-5 py-2 text-white text-sm font-medium rounded-md shadow-sm disabled:bg-slate-200 disabled:text-slate-400 ${isEditing ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
         >
           {isPending ? 'Bezig...' : isEditing ? 'Wijzigingen opslaan' : 'Opslaan'}
         </button>
