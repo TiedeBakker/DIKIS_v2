@@ -26,7 +26,7 @@ export default async function MetingenPage({ searchParams }: Props) {
     <div className="max-w-[1600px] mx-auto space-y-6 px-4 py-2">
       {/* Module Kop */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Metingen & Inspecties</h1>
+        <p className="text-xl font-bold text-slate-900">Metingen & Inspecties</p>
         <p className="text-sm text-slate-500">Registreer waarnemingen per object of via de backoffice matrix.</p>
       </div>
 
