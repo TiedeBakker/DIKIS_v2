@@ -35,9 +35,9 @@ export const modulesConfig: Module[] = [
     enabled: true,
   },
   {
-    id: 'flexibele-invoer',
-    title: 'Flexibele Invoer',
-    path: '/modules/flexibele-invoer',
+    id: 'metingen',
+    title: 'Metingen',
+    path: '/modules/metingen',
     enabled: true,
   },
   {
