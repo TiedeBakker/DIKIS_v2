@@ -18,8 +18,14 @@ export const modulesConfig: Module[] = [
   },
   {
     id: 'basistabellen',
-    title: 'Beheer Basistabellen',
+    title: 'Basistabellen',
     path: '/modules/basistabellen',
+    enabled: true,
+  },
+  {
+    id: 'groeperen',
+    title: 'Groeperen',
+    path: '/modules/beheer',
     enabled: true,
   },
   {

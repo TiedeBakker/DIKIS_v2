@@ -65,21 +65,10 @@ export const parameters = sqliteTable("parameters", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   naam: text("naam").notNull(),
   toelichting: text("toelichting"),
-  
-  // Verwijst nu verplicht naar de UUID van de specifieke optie in de centrale tabel
-  parametertypeId: text("parametertype_id")
-    .notNull()
-    .references(() => keuzelijstOpties.id, { onDelete: "restrict" }),
-    
-  // Verwijst naar de UUID van de specifieke eenheid-optie
-  eenheidId: text("eenheid_id")
-    .references(() => keuzelijstOpties.id, { onDelete: "restrict" }),
-    
-  // Verwijst naar de keuzelijst-hoofdtabel (alleen nodig als parametertypeId 'keuzelijst' is)
-  keuzelijstId: text("keuzelijst_id")
-    .references(() => keuzelijsten.id, { onDelete: "restrict" }),
+  parametertypeId: text("parametertype_id").notNull(), // Verwacht gewoon "Numeriek", "Tekst" etc.
+  eenheidId: text("eenheid_id"),                       // Verwacht gewoon "C", "m³" etc.
+  keuzelijstId: text("keuzelijst_id"),                 // Verwacht de code van de lijst (bijv. 'dak_typen')
 });
-
 
 // ==========================================
 // 4. FORMULIER ENGINE & GROEPEN
@@ -129,6 +118,7 @@ export const metingen = sqliteTable("metingen", {
   datumTijd: text("datum_tijd").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
 });
 
+
 export const logboek = sqliteTable("logboek", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`).notNull(),
@@ -156,13 +146,14 @@ export const beheerMetadata = sqliteTable("beheer_metadata", {
   // NIEUW: Geeft aan of dit veld een kolom moet worden in het overzicht
   toonInLijst: integer('toon_in_lijst', { mode: 'boolean' }).default(false), 
 });
+
 // ==========================================
 // 7. SQL VIEWS
 // ==========================================
 
-// export const vBeschikbareObjecten = sqliteView("v_beschikbare_objecten", {
-//   objectId: text("object_id").notNull(),
-//   objectType: text("object_type").notNull(),
-//   weergaveNaam: text("weergave_naam").notNull(),
-//   extraInfo: text("extra_info"),
-// }).existing();
+export const vBeschikbareObjecten = sqliteView("v_beschikbare_objecten", {
+  objectId: text("object_id").notNull(),
+  objectType: text("object_type").notNull(),
+  weergaveNaam: text("weergave_naam").notNull(),
+  extraInfo: text("extra_info"),
+}).existing();

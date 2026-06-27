@@ -35,54 +35,66 @@ export default async function BasistabellenPage({ searchParams }: Props) {
     .filter(f => f.toonInLijst)
     .map(f => ({ veldId: f.veldId, veldLabel: f.veldLabel }));
 
-  // 3. Dynamisch alle bestaande records van de doeltabel ophalen
+  // 3. Dynamisch alle bestaande records van de doeltabel ophalen (PURE DATABASE DATA)
   let bestaandeRecords: Record<string, any>[] = [];
-  let actueelEditRecord: Record<string, any> | null = null;
 
   try {
     const queryResult = await db.run(sql.raw(`SELECT * FROM "${doelTabel}"`));
     bestaandeRecords = JSON.parse(JSON.stringify(queryResult.rows));
-
-    if (editId) {
-      actueelEditRecord = bestaandeRecords.find(r => r.id === editId) || null;
-    }
   } catch (e) {
     console.error("Kon records niet ophalen:", e);
   }
 
-  // =========================================================================
-  // UNIFORME LOOKUPS (Haalt nu zowel ID als Waarde op!)
-  // =========================================================================
-  // We veranderen het type tijdelijk naar any of breiden GenericForm zo meteen uit
   const dynamischeLookups: Record<string, { id: string; label: string }[]> = {};
   const selectVelden = formDefinition.filter(f => f.veldType?.toLowerCase() === 'select');
 
   for (const veld of selectVelden) {
-    const keuzelijstId = veld.lookupTabel; // Bijv. 'eenheden' of 'parametertypen'
+    const keuzelijstId = veld.lookupTabel;
 
     if (keuzelijstId) {
       try {
-        // We halen nu bewust de 'id' ÉN de 'waarde' op uit keuzelijst_opties
+        // We halen nu puur de tekstWAARDE op. Die gebruiken we als ID én als Label!
         const optiesResult = await db.$client.execute({
-          sql: `
-          SELECT id, waarde 
-          FROM "keuzelijst_opties" 
-          WHERE "keuzelijst_id" = ? 
-          ORDER BY "volgnr" ASC
-        `,
+          sql: `SELECT waarde FROM "keuzelijst_opties" WHERE "keuzelijst_id" = ? ORDER BY "volgnr" ASC`,
           args: [keuzelijstId]
         });
 
         dynamischeLookups[veld.veldId] = optiesResult.rows.map(row => ({
-          id: String(row.id),
-          label: String(row.waarde)
+          id: String(row.waarde),    // Waarde is de ID (bijv. "C")
+          label: String(row.waarde)  // Waarde is het Label (bijv. "C")
         }));
       } catch (err) {
         console.error(`Fout bij het laden van keuzelijst: ${keuzelijstId}`, err);
       }
     }
   }
+  const verrijkteRecords = bestaandeRecords.map(record => {
+    const nieuwRecord = { ...record };
+
+    // Alleen nog de booleans netjes vertalen voor het oog
+    formDefinition.forEach(veld => {
+      if (veld.veldType?.toLowerCase() === 'boolean') {
+        const waarde = record[veld.veldId];
+        if (waarde === 1 || waarde === '1') nieuwRecord[veld.veldId] = 'Ja';
+        if (waarde === 0 || waarde === '0') nieuwRecord[veld.veldId] = 'Nee';
+      }
+    });
+
+    return nieuwRecord;
+  });
   // =========================================================================
+  // BEPAAL HET RECORDFORMAT VOOR HET FORMULIER (Met behoud van PURE UUID's!)
+  // =========================================================================
+  let actueelEditRecord: Record<string, any> | null = null;
+  if (editId) {
+    const puurRecord = bestaandeRecords.find(r => r.id === editId);
+    if (puurRecord) {
+      // Maak een diepe kopie zodat mutaties in de form-state de lijst niet infecteren
+      actueelEditRecord = JSON.parse(JSON.stringify(puurRecord));
+    }
+  }
+  // =========================================================================
+
   // 4. Server Action om data op te slaan (INSERT óf UPDATE via de rauwe client)
   async function handleInsertOrUpdateRecord(formData: Record<string, any>, activeEditId?: string | null) {
     'use server';
@@ -105,13 +117,10 @@ export default async function BasistabellenPage({ searchParams }: Props) {
         throw new Error('Kon het record niet updaten.');
       }
     } else {
-      // GENERIEKE ID-BEHANDELING:
-      // Als de gebruiker zelf een ID heeft ingevuld (bijv. bij keuzelijsten), 
-      // gebruiken we die. Anders genereren we een UUID.
+      // GENERIEKE ID-BEHANDELING
       const heeftEigenId = 'id' in formData && formData.id && String(formData.id).trim() !== '';
       const finalId = heeftEigenId ? String(formData.id).trim() : crypto.randomUUID();
 
-      // Filter de eventuele id uit formData om dubbelingen te voorkomen
       const geschoondeData = { ...formData };
       delete geschoondeData.id;
 
@@ -132,30 +141,6 @@ export default async function BasistabellenPage({ searchParams }: Props) {
     }
   }
 
-// =========================================================================
-  // VERRIJK RECORDS VOOR DE RECORDLIJST (Gecorrigeerd!)
-  // =========================================================================
-  const verrijkteRecords = bestaandeRecords.map(record => {
-    const nieuwRecord = { ...record };
-    
-    selectVelden.forEach(veld => {
-      const huidigeIdInRecord = record[veld.veldId];
-      
-      if (huidigeIdInRecord) {
-        // Nu netjes aan elkaar geschreven en type-safe gecast
-        const optiesVoorVeld = (dynamischeLookups[veld.veldId] || []) as { id: string; label: string }[];
-        const gevondenOptie = optiesVoorVeld.find(o => o.id === String(huidigeIdInRecord));
-        
-        if (gevondenOptie) {
-          nieuwRecord[veld.veldId] = gevondenOptie.label;
-        }
-      }
-    });
-    
-    return nieuwRecord;
-  });
-  // =========================================================================
-
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 px-4">
       {/* Tab-navigatie */}
@@ -166,7 +151,9 @@ export default async function BasistabellenPage({ searchParams }: Props) {
             <Link
               key={t.tabelNaam}
               href={`/modules/basistabellen?tabel=${t.tabelNaam}`}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors -mb-px border ${isSelected ? 'bg-white border-slate-200 border-b-white text-blue-600' : 'bg-slate-50 border-transparent text-slate-500 hover:text-slate-700'
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors -mb-px border ${isSelected
+                ? 'bg-white border-slate-200 border-b-white text-blue-600'
+                : 'bg-slate-50 border-transparent text-slate-500 hover:text-slate-700'
                 }`}
             >
               {t.tabelLabel}
@@ -182,7 +169,7 @@ export default async function BasistabellenPage({ searchParams }: Props) {
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
 
-          {/* Kolom 1: Het Formulier */}
+          {/* Kolom 1: Het Formulier (Krijgt de pure UUID's via actueelEditRecord) */}
           <div>
             <GenericForm
               key={`${doelTabel}-${editId || 'new'}`}
@@ -190,21 +177,21 @@ export default async function BasistabellenPage({ searchParams }: Props) {
               fields={formDefinition as MetadataField[]}
               onSubmit={handleInsertOrUpdateRecord}
               initialData={actueelEditRecord}
-              lookups={dynamischeLookups} // <-- Geef de vers geladen lookups mee!
+              lookups={dynamischeLookups}
             />
           </div>
 
-          {/* Kolom 2: De Live Recordlijst */}
-          <div>
+          {/* Kolom 2: De Live Recordlijst (Krijgt de menselijk leesbare verrijkteRecords) */}
+          <div className="xl:sticky xl:top-6 max-h-[calc(90vh-120px)] overflow-y-auto rounded-lg border border-slate-200 bg-white">
             {lijstKolommen.length > 0 ? (
               <RecordLijst
                 key={`${doelTabel}-lijst`}
                 tabelNaam={doelTabel}
                 kolommen={lijstKolommen}
-                records={verrijkteRecords} // <-- Verander 'bestaandeRecords' naar 'verrijkteRecords'
+                records={verrijkteRecords}
               />
             ) : (
-              <div className="p-6 bg-slate-50 text-slate-500 border rounded-lg text-sm italic">
+              <div className="p-6 text-slate-500 text-sm italic">
                 Er zijn geen kolommen gemarkeerd voor de overzichtslijst van deze tabel (toon_in_lijst).
               </div>
             )}
